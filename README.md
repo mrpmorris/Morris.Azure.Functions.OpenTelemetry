@@ -1,0 +1,1 @@
+# Morris.Azure.Functions.OpenTelemetry
