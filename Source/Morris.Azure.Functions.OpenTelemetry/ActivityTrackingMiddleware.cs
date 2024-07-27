@@ -17,18 +17,24 @@ public class ActivityTrackingMiddleware : IFunctionsWorkerMiddleware
 	private readonly HttpTriggerHandler HttpTriggerHandler;
 	private readonly ActivityTriggerHandler ActivityTriggerHandler;
 	private readonly OrchestrationTriggerHandler OrchestratorTriggerHandler;
+	private readonly ServiceBusTriggerHandler ServiceBusTriggerHandler;
+    private readonly CronTriggerHandler CronTriggerHandler;
 	private readonly FrozenDictionary<string, ICustomTriggerHandler> CustomTriggerHandlers;
 
 	public ActivityTrackingMiddleware(
 		HttpTriggerHandler httpTriggerHandler,
 		ActivityTriggerHandler activityTriggerHandler,
 		IEnumerable<ICustomTriggerHandler> customTriggerHandlers,
-		OrchestrationTriggerHandler orchestratorTriggerHandler)
+		OrchestrationTriggerHandler orchestratorTriggerHandler,
+		ServiceBusTriggerHandler serviceBusTriggerHandler, 
+		CronTriggerHandler cronTriggerHandler)
 	{
 		HttpTriggerHandler = httpTriggerHandler ?? throw new ArgumentNullException(nameof(httpTriggerHandler));
 		CustomTriggerHandlers = customTriggerHandlers.ToFrozenDictionary(x => x.GetTriggerTypeName());
 		ActivityTriggerHandler = activityTriggerHandler ?? throw new ArgumentNullException(nameof(activityTriggerHandler));
 		OrchestratorTriggerHandler = orchestratorTriggerHandler ?? throw new ArgumentNullException(nameof(orchestratorTriggerHandler));
+		ServiceBusTriggerHandler = serviceBusTriggerHandler ?? throw new ArgumentNullException(nameof(serviceBusTriggerHandler));
+        CronTriggerHandler = cronTriggerHandler ?? throw new ArgumentNullException(nameof(cronTriggerHandler));
 	}
 
 	public async Task Invoke(FunctionContext context, FunctionExecutionDelegate next)
@@ -43,6 +49,8 @@ public class ActivityTrackingMiddleware : IFunctionsWorkerMiddleware
 				"httpTrigger" => HttpTriggerHandler,
 				"activityTrigger" => ActivityTriggerHandler,
 				"orchestrationTrigger" => OrchestratorTriggerHandler,
+				"serviceBusTrigger" => ServiceBusTriggerHandler,
+                "timerTrigger" => CronTriggerHandler,
 				_ => CustomTriggerHandlers.TryGetValue(triggerType, out var h) ? h : null,
 			};
 
@@ -55,19 +63,20 @@ public class ActivityTrackingMiddleware : IFunctionsWorkerMiddleware
 					context,
 					next);
 
-			if (activity is not null)
-			{
-				activity.SetTag(TraceSemanticConventions.AttributeFaasInvokedName, context.FunctionDefinition.Name);
-				activity.SetTag(TraceSemanticConventions.AttributeFaasExecution, context.InvocationId);
-				activity.SetTag(FunctionActivityConstants.Entrypoint, context.FunctionDefinition.EntryPoint);
-				activity.SetTag(FunctionActivityConstants.Id, context.FunctionDefinition.Id);
-			}
-		}
-		finally
-		{
-			activity?.Dispose();
-		}
-	}
+            if (activity is not null)
+            {
+                activity.SetTag(TraceSemanticConventions.AttributeFaasInvokedName, context.FunctionDefinition.Name);
+                activity.SetTag(TraceSemanticConventions.AttributeFaasExecution, context.InvocationId);
+                activity.SetTag(TraceSemanticConventions.AttributeFaasTrigger, triggerType);
+                activity.SetTag(FunctionActivityConstants.Entrypoint, context.FunctionDefinition.EntryPoint);
+                activity.SetTag(FunctionActivityConstants.Id, context.FunctionDefinition.Id);
+            }
+        }
+        finally
+        {
+            activity?.Dispose();
+        }
+    }
 
 	private async Task<Activity?> PassthroughHandlerAsync(FunctionContext context, FunctionExecutionDelegate next)
 	{

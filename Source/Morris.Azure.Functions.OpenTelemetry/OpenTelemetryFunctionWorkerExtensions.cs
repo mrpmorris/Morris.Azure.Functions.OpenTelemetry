@@ -30,5 +30,7 @@ public static class OpenTelemetryFunctionWorkerExtensions
 		builder.Services.TryAddSingleton<HttpTriggerHandler>();
 		builder.Services.TryAddSingleton<ActivityTriggerHandler>();
 		builder.Services.TryAddSingleton<OrchestrationTriggerHandler>();
+		builder.Services.TryAddSingleton<ServiceBusTriggerHandler>();
+        builder.Services.TryAddSingleton<CronTriggerHandler>();
 	}
 }
